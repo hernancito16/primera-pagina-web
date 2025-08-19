@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cuestionario SUSESO/ISTAS21 – Versión completa</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="color-scheme" content="light only" />
+  <style>
+    html { scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-fuchsia-100 via-indigo-100 to-sky-100 p-4 sm:p-8">
+  <main class="mx-auto w-full max-w-5xl">
+    <header class="mb-6 flex items-center justify-between gap-4">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">SUSESO/ISTAS21 – Versión completa</h1>
+        <p class="text-gray-600">Responda todas las preguntas. Sus respuestas son anónimas y confidenciales.</p>
+      </div>
+      <div class="shrink-0">
+        <span class="inline-flex items-center rounded-full px-3 py-1 text-sm bg-white shadow">ID anónimo: <strong id="anonId" class="ml-1 font-mono"></strong></span>
+      </div>
+    </header>
+
+    <!-- Barra de progreso -->
+    <div class="mb-6 bg-white/70 backdrop-blur rounded-xl shadow p-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-medium text-gray-700">Progreso</span>
+        <span id="progressText" class="font-semibold text-gray-800">0%</span>
+      </div>
+      <div class="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
+        <div id="progressBar" class="h-full w-0 bg-indigo-600 transition-all"></div>
+      </div>
+    </div>
+
+    <!-- FORMULARIO NETLIFY -->
+    <form id="form" name="suseso-istas21" method="POST" data-netlify="true" netlify-honeypot="bot-field" class="space-y-6">
+      <input type="hidden" name="form-name" value="suseso-istas21" />
+      <input type="hidden" name="anon_id" id="anon_id_input" />
+      <input type="hidden" name="timestamp" id="timestamp" />
+      <p class="hidden"><label>Don’t fill this out if you're human: <input name="bot-field" /></label></p>
+
+      <!-- Intro -->
+      <section class="bg-white rounded-2xl shadow p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-2">Instrucciones</h2>
+        <p class="text-gray-600">Por favor, conteste <strong>TODAS</strong> las preguntas. No hay respuestas buenas o malas. El envío es anónimo: solo guardamos un ID aleatorio y la fecha/hora para distinguir respuestas.</p>
+      </section>
+
+      <!-- Contenedor dinámico de preguntas -->
+      <section id="questions" class="space-y-6"></section>
+
+      <!-- Acciones -->
+      <section class="bg-white rounded-2xl shadow p-6 flex flex-col sm:flex-row gap-3 justify-between items-center">
+        <div class="flex gap-3">
+          <button type="button" id="saveBtn" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 shadow">Guardar avance</button>
+          <button type="button" id="clearBtn" class="px-4 py-2 rounded-lg bg-white border hover:bg-gray-50 text-gray-700">Borrar respuestas</button>
+        </div>
+        <button type="submit" class="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg">Enviar cuestionario</button>
+      </section>
+
+      <p class="text-center text-sm text-gray-500">Al enviar acepta el tratamiento confidencial y anónimo de sus respuestas.</p>
+    </form>
+
+    <!-- Éxito (Netlify redirect opcional) -->
+    <div id="success" class="hidden mt-6 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-4">
+      ¡Gracias! Su cuestionario fue enviado correctamente.
+    </div>
+  </main>
+
+  <script>
+    // ===== Helper UI =====
+    const Q = {
+      radios(name, label, options, required=true) {
+        const groupId = `g_${name}`;
+        return `
+        <div class="bg-white rounded-2xl shadow p-6">
+          <fieldset>
+            <legend class="block text-base sm:text-lg font-medium text-gray-800 mb-3">${label}</legend>
+            <div class="grid gap-2">
+              ${options.map((opt,i)=>`
+                <label class="flex items-center gap-2">
+                  <input type="radio" name="${name}" value="${opt}" ${required && i===0 ? 'required' : ''}>
+                  <span>${opt}</span>
+                </label>`).join('')}
+            </div>
+          </fieldset>
+        </div>`;
+      },
+      radiosCols(name, label, options, required=true){
+        return `
+        <div class="bg-white rounded-2xl shadow p-6">
+          <fieldset>
+            <legend class="block text-base sm:text-lg font-medium text-gray-800 mb-4">${label}</legend>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              ${options.map((opt,i)=>`
+                <label class="flex items-center gap-2">
+                  <input type="radio" name="${name}" value="${opt}" ${required && i===0 ? 'required' : ''}>
+                  <span>${opt}</span>
+                </label>`).join('')}
+            </div>
+          </fieldset>
+        </div>`;
+      },
+      text(name,label,placeholder="",required=true){
+        return `
+        <div class="bg-white rounded-2xl shadow p-6">
+          <label class="block text-base sm:text-lg font-medium text-gray-800 mb-2" for="${name}">${label}</label>
+          <input id="${name}" name="${name}" type="text" ${required?'required':''} placeholder="${placeholder}" class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+        </div>`;
+      },
+      number(name,label,placeholder="",required=true){
+        return `
+        <div class="bg-white rounded-2xl shadow p-6">
+          <label class="block text-base sm:text-lg font-medium text-gray-800 mb-2" for="${name}">${label}</label>
+          <input id="${name}" name="${name}" type="number" ${required?'required':''} placeholder="${placeholder}" class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+        </div>`;
+      },
+      select(name,label,options,required=true){
+        return `
+        <div class="bg-white rounded-2xl shadow p-6">
+          <label class="block text-base sm:text-lg font-medium text-gray-800 mb-2" for="${name}">${label}</label>
+          <select id="${name}" name="${name}" ${required?'required':''} class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+            <option value="" disabled selected>Seleccione…</option>
+            ${options.map(o=>`<option value="${o}">${o}</option>`).join('')}
+          </select>
+        </div>`;
+      }
+    };
+
+    // ===== Escalas =====
+    const escala5_excelente = ["Excelente","Muy buena","Buena","Regular","Mala"];
+    const escala5_cierta = ["Totalmente cierta","Casi siempre cierta","No sé","Casi siempre falsa","Totalmente falsa"];
+    const escala5_frecuencia = ["Siempre","Muchas veces","Algunas veces","Sólo alguna vez","Nunca"];
+    const escalaYN = ["Sí","No"];
+    const escalaJornada = ["a tiempo parcial","a tiempo completo","no sujeto a cumplimiento de horario"];
+    const escalaHorario = ["horario diurno (mañana y tarde)","turno fijo de mañana","turno fijo de tarde","turno fijo de noche","turnos rotatorios"];
+    const escalaLaboral = ["de lunes a viernes","de lunes a sábado","sólo fines de semana o festivos","de lunes a viernes y a veces sábado, domingo y festivos","semana corrida, incluyendo domingo y festivos"];
+    const escalaAviso = ["no me cambian de horario ni de días de trabajo","usualmente me lo comunican con varios días de anticipación y no me produce mayores inconvenientes","habitualmente me lo comunican con algunos días de anticipación, pero me ocasiona dificultades en otros aspectos de mi vida","habitualmente me lo comunican de un día para otro","habitualmente me lo comunican en el mismo día"];
+    const escalaRazonHoras = ["la semana pasada trabajé 45 (44) horas o más","trabajo a tiempo parcial para esta empresa o institución","tengo una distribución irregular de mi jornada de trabajo (no siempre trabajo las mismas horas)","he estado de vacaciones, enfermo o con permiso","otros motivos"];
+    const escalaRelacion = ["tengo contrato indefinido o mi cargo es de planta","tengo contrato temporal o mi cargo es a contrata","trabajo por faenas o proyectos","estoy contratado por una empresa externa","tengo contrato a honorarios","soy estudiante en práctica","no tengo contrato"];
+    const escalaSueldo = ["$200.000 o menos","entre $200.001 y $500.000","entre $500.001 y $800.000","entre $800.001 y $1.000.000","entre $1.000.001 y $2.000.000","Más de $2.000.000"];
+    const escalaTipoSueldo = ["Fijo","Sueldo base más comisiones o variable","Sólo variable"];
+    const escalaDeudasPorcentaje = ["No tengo deudas.","Destino hasta un 10% de mi sueldo al pago de mis deudas","Destino hasta un 25% (un cuarto) de mi sueldo al pago de mis deudas","Destino hasta un 50% (la mitad) de mi sueldo al pago de mis deudas","Destino más del 50% (más de la mitad) de mi sueldo al pago de mis deudas"];
+    const escalaDeudaDificultad = ["No tengo deudas.","Tengo deudas, pero no tengo dificultades para pagarlas","Tengo deudas, y tengo ocasionales dificultades para pagarlas","Tengo deudas, y tengo siempre dificultades para pagarlas","Tengo deudas, y tengo permanentes y graves dificultades para pagarlas"];
+    const escalaDomestico = ["Soy la/el principal responsable y hago la mayor parte de las tareas del hogar.","Hago más o menos la mitad de las tareas del hogar","Hago más o menos la cuarta parte de las tareas del hogar","Solo hago tareas puntuales","No hago ninguna o casi ninguna de estas tareas"];
+    const escalaDomesticoAusencia = ["Siempre","La mayoría de las veces","Algunas veces","Solo unas pocas veces","Nunca"];
+    const escalaPreocupacion = ["Estoy muy preocupado","Estoy bastante preocupado","Estoy más o menos preocupado","Estoy un poco preocupado","No estoy preocupado por esto"];
+
+    // ===== Render =====
+    const $q = document.getElementById('questions');
+    const blocks = [];
+
+    // Sección general – Datos demográficos
+    blocks.push(`<h2 class='text-xl font-semibold text-gray-800'>Sección general – Datos demográficos</h2>`);
+    blocks.push(Q.radiosCols('sexo','Sexo',["Hombre","Mujer"],true));
+    blocks.push(Q.radiosCols('edad','¿Qué edad tiene?',[
+      "Menos de 26 años","Entre 26 y 35 años","Entre 36 y 45 años","Entre 46 y 55 años","Más de 55 años"
+    ],true));
+
+    // Salud y bienestar personal
+    blocks.push(`<h2 class='text-xl font-semibold text-gray-800'>Salud y bienestar personal</h2>`);
+    blocks.push(Q.radios('SG1','SG1. En general diría Ud. que su salud es',escala5_excelente,true));
+    blocks.push(Q.radios('SG2','SG2. Me enfermo con más facilidad que otras personas',escala5_cierta,true));
+    blocks.push(Q.radios('SG3','SG3. Estoy tan saludable como cualquier persona',escala5_cierta,true));
+    blocks.push(Q.radios('SG4','SG4. Creo que mi salud va a empeorar',escala5_cierta,true));
+    blocks.push(Q.radios('SG5','SG5. Mi salud es excelente',escala5_cierta,true));
+
+    blocks.push(Q.radios('SM1','SM1. ¿Estuvo muy nerviosa/o?',escala5_frecuencia,true));
+    blocks.push(Q.radios('SM2','SM2. ¿Estuvo muy decaída/o que nada lo anima?',escala5_frecuencia,true));
+    blocks.push(Q.radios('SM3','SM3. ¿Se sintió tranquila/o y calmada/o?',escala5_frecuencia,true));
+    blocks.push(Q.radios('SM4','SM4. ¿Se sintió desanimada/o y triste?',escala5_frecuencia,true));
+    blocks.push(Q.radios('SM5','SM5. ¿Se sintió una persona feliz?',escala5_frecuencia,true));
+
+    blocks.push(Q.radios('VT1','VT1. ¿Se sintió muy animosa/o?',escala5_frecuencia,true));
+    blocks.push(Q.radios('VT2','VT2. ¿Se sintió con mucha energía?',escala5_frecuencia,true));
+    blocks.push(Q.radios('VT3','VT3. ¿Se sintió agotada/o?',escala5_frecuencia,true));
+    blocks.push(Q.radios('VT4','VT4. ¿Se sintió cansada/o?',escala5_frecuencia,true));
+
+    blocks.push(Q.radios('AT1','AT1. En los últimos 12 meses, ¿ha tenido usted algún accidente de trabajo? (excluye trayecto)',escalaYN,true));
+    blocks.push(Q.radios('EP1','EP1. ¿Usted tiene o ha tenido alguna enfermedad diagnosticada provocada por el trabajo?',escalaYN,true));
+
+    // Síntomas últimas 4 semanas SR1–SR12
+    blocks.push(`<h3 class='text-lg font-semibold text-gray-800'>Durante las últimas cuatro semanas…</h3>`);
+    ['SR1 No he tenido ánimos para estar con gente','SR2 No he podido dormir bien','SR3 He estado irritable','SR4 Me he sentido agobiado/a','SR5 ¿Ha sentido opresión o dolor en el pecho?','SR6 ¿Le ha faltado el aire?','SR7 ¿Ha sentido tensión en los músculos?','SR8 ¿Ha tenido dolor de cabeza?','SR9 ¿Ha tenido problemas para concentrarse?','SR10 ¿Le ha costado tomar decisiones?','SR11 ¿Ha tenido dificultades para acordarse de las cosas?','SR12 ¿Ha tenido dificultades para pensar de forma clara?']
+      .forEach(txt=>{
+        const code = txt.split(' ')[0];
+        blocks.push(Q.radios(code, txt, escala5_frecuencia, true));
+      });
+
+    // Trabajo y empleo actual – TE1–TE21
+    blocks.push(`<h2 class='text-xl font-semibold text-gray-800'>Trabajo y empleo actual</h2>`);
+    blocks.push(Q.text('TE1','TE1. ¿En qué unidad geográfica trabaja usted? (sucursal, piso, región, etc.)','Especifique…',true));
+    blocks.push(Q.text('TE2','TE2. ¿En qué estamento, profesión o cargo está usted?','Especifique…',true));
+    blocks.push(Q.text('TE3','TE3. ¿En qué departamento, unidad o sección trabaja usted?','Especifique…',true));
+    blocks.push(Q.radios('TE4','TE4. En el último año, ¿ha trabajado en dos o más secciones o departamentos al mismo tiempo?',escalaYN,true));
+    blocks.push(Q.radios('TE5','TE5. En el último año, ¿ha tenido dos o más jefes o supervisores al mismo tiempo?',escalaYN,true));
+    blocks.push(Q.radios('TE6','TE6. ¿El trabajo que realiza se corresponde con su sueldo?',[
+      'Sí','No, el trabajo que hago está por encima de lo que se me reconoce en el sueldo','No, el trabajo que hago está por debajo de lo que se me reconoce en el sueldo','No lo sé'
+    ],true));
+    blocks.push(Q.radios('TE7','TE7. ¿Cuánto tiempo lleva trabajando en esta empresa o institución?',["De 0 hasta 6 meses","Más de 6 meses y hasta 2 años","Más de 2 años y hasta 5 años","Más de 5 años y hasta de 10 años","Más de 10 años"],true));
+    blocks.push(Q.radios('TE8','TE8. ¿Considera que los ascensos o promociones están en armonía con su tiempo en la empresa?',escalaYN,true));
+    blocks.push(Q.radios('TE9','TE9. Su jornada de trabajo es:',escalaJornada,true));
+    blocks.push(Q.radios('TE10','TE10. Su horario de trabajo es:',escalaHorario,true));
+    blocks.push(Q.radios('TE11','TE11. Su jornada laboral es:',escalaLaboral,true));
+    blocks.push(Q.radios('TE12','TE12. Si le cambian de horario o días, ¿con cuánto tiempo de antelación se lo comunican?',escalaAviso,true));
+    blocks.push(Q.number('TE13','TE13. Indique cuántas horas semanales trabajó la semana pasada:','Ej. 45',true));
+    blocks.push(Q.radios('TE14','TE14. Si anotó menos de 45 (44 sector público) horas, señale la razón. Si anotó más, marque la primera alternativa.',escalaRazonHoras,true));
+    blocks.push(Q.radios('TE15','TE15. ¿Qué tipo de relación laboral tiene con la empresa o institución?',escalaRelacion,true));
+    blocks.push(Q.radios('TE16','TE16. Aproximadamente, ¿cuánto es su sueldo líquido mensual?',escalaSueldo,true));
+    blocks.push(Q.radios('TE17','TE17. Su sueldo es',escalaTipoSueldo,true));
+    blocks.push(Q.radios('TE18','TE18. ¿Qué parte de su sueldo destina al pago de deudas?',escalaDeudasPorcentaje,true));
+    blocks.push(Q.radios('TE19','TE19. Si usted tiene deudas, indique qué grado de dificultad tiene para pagarlas',escalaDeudaDificultad,true));
+    blocks.push(Q.radios('TE20','TE20. ¿Qué parte del trabajo familiar y/o doméstico le toca hacer a Ud.?',escalaDomestico,true));
+    blocks.push(Q.radios('TE21','TE21. Si está ausente un día de casa, las tareas domésticas que realiza, ¿se quedan sin hacer?',escalaDomesticoAusencia,true));
+
+    // Licencias médicas
+    blocks.push(`<h2 class='text-xl font-semibold text-gray-800'>Licencias médicas</h2>`);
+    blocks.push(Q.radios('LM1_opt','LM1. En los últimos 12 meses, ¿cuántas licencias médicas ha tenido aproximadamente?',[
+      'No he tenido ninguna licencia por enfermedad en el último año','Indicar número'
+    ],true));
+    blocks.push(Q.number('LM1_num','Si indicó "Indicar número": ¿cuántas licencias aproximadamente?','Ej. 2',false));
+    blocks.push(Q.radios('LM3_opt','LM3. En los últimos 12 meses, ¿cuántos días aproximadamente ha estado con licencia médica?',[
+      'No he estado con licencia por enfermedad en el último año','Indicar días'
+    ],true));
+    blocks.push(Q.number('LM3_num','Si indicó "Indicar días": ¿cuántos días aproximadamente?','Ej. 7',false));
+
+    // Sección específica de riesgo psicosocial
+    blocks.push(`<h2 class='text-xl font-semibold text-gray-800'>Sección específica de riesgo psicosocial</h2>`);
+
+    // Carga cuantitativa CU1–CU7
+    ['CU1 ¿Tiene que trabajar muy rápido para entregar tareas solicitadas en poco tiempo?','CU2 ¿La distribución de tareas es irregular y provoca que se le acumule el trabajo?','CU3 ¿Tiene tiempo para tener al día su trabajo?','CU4 ¿Se retrasa en la entrega de su trabajo?','CU5 ¿Puede hacer su trabajo con tranquilidad y tenerlo al día?','CU6 ¿Tiene tiempo suficiente para hacer su trabajo?','CU7 ¿Tiene que quedarse después de la hora de salida para completar su trabajo?']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escala5_frecuencia, true)); });
+
+    // Carga cognitiva CO1–CO8
+    ['CO1 En su trabajo, ¿tiene usted que controlar o estar atento a muchas situaciones a la vez?','CO2 En su trabajo, ¿tiene que memorizar muchas cosas?','CO3 ¿Su trabajo requiere que sea capaz de proponer nuevas ideas?','CO4 En su trabajo, ¿tiene usted que tomar decisiones en forma rápida?','CO5 En su trabajo, ¿tiene usted que tomar decisiones difíciles?','CO6 ¿Tiene que tomar decisiones que son importantes para su lugar de trabajo?','CO7 El trabajo que usted hace, ¿puede tener repercusiones importantes sobre sus compañeros, clientes, usuarios, maquinas o instalaciones?','CO8 En su trabajo, ¿tiene que manejar muchos conocimientos?']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escala5_frecuencia, true)); });
+
+    // Exigencias emocionales EM1–EM2, EE1–EE2, ES1–ES4
+    ['EM1 ¿Hay en su trabajo momentos y/o situaciones que le producen desgaste emocional?','EM2 En general, ¿considera usted que su trabajo le produce desgaste emocional?','EE1 En su trabajo, ¿tiene usted que guardar sus opiniones y no expresarlas?','EE2 En su trabajo, ¿tiene usted que guardar sus emociones y no expresarlas?','ES1 ¿Su trabajo requiere mucha concentración?','ES2 ¿Su trabajo requiere mirar con detalle?','ES3 ¿Su trabajo requiere atención constante?','ES4 ¿Su trabajo requiere un alto nivel de exactitud?']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escala5_frecuencia, true)); });
+
+    // Autonomía – Influencia IN1–IN7, Control del tiempo CT1–CT4
+    ['IN1 ¿Otras personas toman decisiones sobre sus tareas?','IN2 ¿Tiene poder para decidir sobre el ritmo al que trabaja?','IN3 ¿Puede escoger a quién tiene como compañero/a de trabajo?','IN4 ¿Tiene poder para decidir sobre la cantidad de trabajo que se le asigna?','IN5 ¿Tiene poder para decidir sobre el horario en el que trabaja?','IN6 ¿Tiene poder para decidir sobre la calidad del trabajo que usted tiene?','IN7 ¿Tiene poder para decidir sobre el orden en el que realiza sus tareas?','CT1 ¿Puede decidir cuándo hace un descanso?','CT2 ¿Puede tomar las vacaciones más o menos cuando usted quiere?','CT3 ¿Puede dejar su trabajo un momento para conversar con un compañero o compañera?','CT4 Si tiene algún asunto personal o familiar, ¿puede dejar su puesto de trabajo al menos una hora, sin tener que pedir un permiso especial?']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escala5_frecuencia, true)); });
+
+    // Desarrollo/Significado/Integración – PD1–PD7, ST1–ST3, IE1–IE4
+    ['PD1 ¿Su trabajo es variado (tareas diferentes y diversas)?','PD2 ¿Su trabajo requiere un alto nivel de especialización (habilidad y conocimientos específicos, experiencia....)?','PD3 ¿Tiene que hacer lo mismo una y otra vez, en forma repetida?','PD4 ¿Su trabajo requiere que tenga iniciativa?','PD5 ¿Su trabajo permite que aprenda cosas nuevas?','PD6 ¿La realización de su trabajo permite que aplique sus habilidades y conocimientos?','PD7 ¿Su trabajo le da la oportunidad de mejorar sus habilidades técnicas y profesionales?','ST1 Las tareas que hace ¿tienen sentido para usted?','ST2 Las tareas que hace ¿le parecen importantes?','ST3 ¿Se siente comprometido con su profesión u oficio?','IE1 ¿Le gustaría quedarse en la empresa o institución en la que está para el resto de su vida laboral, manteniendo las condiciones actuales?','IE2 ¿Habla con entusiasmo de su empresa o institución?','IE3 ¿Siente que los problemas en su empresa o institución son también suyos?','IE4 ¿Siente que su empresa o institución tiene una gran importancia para usted?']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escala5_frecuencia, true)); });
+
+    // Rol y Conflicto – RL1–RL4, CR1–CR5
+    ['RL1 ¿Sabe exactamente qué margen de autonomía tiene en su trabajo?','RL2 ¿Su trabajo tiene objetivos o metas claras?','RL3 ¿Sabe exactamente qué tareas son de su responsabilidad?','RL4 ¿Sabe exactamente qué se espera de usted en el trabajo?','CR1 ¿Debe hacer o se siente presionado a hacer cosas en el trabajo que no son aceptadas por algunas personas?','CR2 ¿Se le exigen cosas contradictorias en el trabajo?','CR3 ¿Tiene que hacer tareas que usted cree que deberían hacerse de otra manera?','CR4 ¿Tiene que realizar tareas que le parecen innecesarias?','CR5 ¿Tiene que hacer cosas en contra de sus principios y valores en el trabajo?']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escala5_frecuencia, true)); });
+
+    // Liderazgo y Apoyos – CL1–CL6, RS1–RS5, RC1–RC6
+    ['CL1 Sus jefes directos, ¿se aseguran de que cada trabajador/a tiene buenas oportunidades de desarrollo profesional?','CL2 Sus jefes directos, ¿planifican bien el trabajo?','CL3 Sus jefes directos, ¿resuelven bien los conflictos?','CL4 Sus jefes directos, ¿se comunican de buena forma y claramente con los trabajadores/as?','CL5 Sus jefes directos, ¿le dan importancia a que los trabajadores/as estén a gusto en el trabajo?','CL6 Sus jefes directos, ¿asignan bien el trabajo?','RS1 ¿En su empresa o institución se le informa con suficiente anticipación de los cambios que pueden afectar su futuro, tanto laboral como personal?','RS2 ¿Recibe toda la información que necesita para realizar bien su trabajo?','RS3 ¿Su superior habla con usted acerca de cómo lleva a cabo su trabajo?','RS4 Su superior directo, ¿está dispuesto a escuchar sus problemas en el trabajo?','RS5 ¿Recibe ayuda y apoyo de su superior directo?','RC1 ¿Con qué frecuencia habla con sus compañeros/as sobre cómo lleva a cabo su trabajo?','RC2 ¿Con qué frecuencia sus compañeros/as están dispuestos a escuchar sus problemas en el trabajo?','RC3 ¿Con qué frecuencia recibe ayuda y apoyo para el trabajo de sus compañeras/os?','RC4 ¿Hay un buen ambiente entre usted y sus compañeros/as de trabajo?','RC5 Entre compañeros/as, ¿se ayudan en el trabajo?','RC6 En su trabajo, ¿siente usted que forma parte de un grupo o equipo de trabajo?']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escala5_frecuencia, true)); });
+
+    // Reconocimiento – ET1–ET5
+    ['ET1 Mis superiores me dan el reconocimiento que merezco','ET2 Mis compañeros de trabajo me dan el reconocimiento que merezco','ET3 En las situaciones difíciles en el trabajo recibo el apoyo necesario','ET4 En mi trabajo me tratan injustamente','ET5 Si pienso en todo el trabajo y esfuerzo que he realizado, el reconocimiento que recibo me parece adecuado']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escala5_frecuencia, true)); });
+
+    // Inseguridad por cambios – IC1–IC5, IT1–IT3 (escala de preocupación)
+    ['IC1 ¿Está preocupado por si le despiden o no le renuevan el contrato?','IC2 ¿Está preocupado por lo difícil que sería encontrar otro trabajo si se quedara cesante?','IC3 ¿Está preocupado por si le varían el sueldo?','IC4 ¿Está preocupado por si no le hacen un contrato indefinido?','IC5 ¿Está preocupado por si no le ascienden?','IT1 ¿Está preocupado por si le trasladan contra su voluntad a otro lugar de trabajo, obra, funciones, unidad, departamento o sección?','IT2 ¿Está preocupado por si le cambian de tareas contra su voluntad?','IT3 ¿Está preocupado por si le cambian contra su voluntad los horarios (turnos, días, horas de entrada y salida)?']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escalaPreocupacion, true)); });
+
+    // Doble presencia – DP1–DP2
+    ['DP1 Cuando está en el trabajo, ¿piensa en las exigencias domésticas y familiares?','DP2 ¿Hay situaciones en las que debería estar en el trabajo y en la casa a la vez?']
+      .forEach(txt=>{ const code = txt.split(' ')[0]; blocks.push(Q.radios(code, txt, escala5_frecuencia, true)); });
+
+    $q.innerHTML = blocks.join('\n');
+
+    // ===== ID anónimo y timestamp =====
+    function genId(){
+      const arr = new Uint8Array(10); crypto.getRandomValues(arr);
+      return Array.from(arr,x=>x.toString(16).padStart(2,'0')).join('');
+    }
+    const anonId = genId();
+    document.getElementById('anonId').textContent = anonId.slice(0,8);
+    document.getElementById('anon_id_input').value = anonId;
+    document.getElementById('timestamp').value = new Date().toISOString();
+
+    // ===== Progreso =====
+    const form = document.getElementById('form');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+
+    function updateProgress(){
+      const groups = new Set();
+      const answered = new Set();
+      form.querySelectorAll('input[type="radio"]').forEach(r=>groups.add(r.name));
+      form.querySelectorAll('input[type="radio"]:checked').forEach(r=>answered.add(r.name));
+      // + selects/text/number
+      form.querySelectorAll('select,input[type="text"],input[type="number"]').forEach(el=>{ if(el.value) answered.add(el.name); groups.add(el.name); });
+      const total = groups.size; const done = answered.size; const pct = total ? Math.round((done/total)*100) : 0;
+      progressBar.style.width = pct+'%';
+      progressText.textContent = pct+'%';
+    }
+    form.addEventListener('change', updateProgress);
+    window.addEventListener('load', updateProgress);
+
+    // ===== Guardar/Restaurar (localStorage) =====
+    const STORAGE_KEY = 'suseso_istas21_respuestas_v1';
+    const saveBtn = document.getElementById('saveBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    function saveToLocal(){
+      const data = {};
+      new FormData(form).forEach((v,k)=>{ data[k]=v; });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+    function restoreFromLocal(){
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        Object.entries(data).forEach(([k,v])=>{
+          const el = form.elements[k];
+          if(!el) return;
+          if(el instanceof RadioNodeList){
+            const item = form.querySelector(`input[name="${k}"][value="${CSS.escape(v)}"]`);
+            if(item) item.checked = true;
+          } else if(el.tagName==='SELECT' || el.type==='text' || el.type==='number') {
+            el.value = v;
+          }
+        });
+      } catch(e){ console.warn('No se pudo restaurar', e); }
+      updateProgress();
+    }
+    saveBtn.addEventListener('click', ()=>{ saveToLocal(); alert('Avance guardado en este dispositivo.'); });
+    clearBtn.addEventListener('click', ()=>{
+      if(confirm('¿Borrar todas las respuestas de este dispositivo?')){
+        localStorage.removeItem(STORAGE_KEY);
+        form.reset(); updateProgress();
+      }
+    });
+    restoreFromLocal();
+
+    // ===== Envío =====
+    form.addEventListener('submit', (e)=>{
+      document.getElementById('timestamp').value = new Date().toISOString();
+    });
+  </script>
+</body>
+</html>
