@@ -344,7 +344,7 @@
     form.addEventListener('submit', (e)=>{
       e.preventDefault();
       document.getElementById('timestamp').value = new Date().toISOString();
-      emailjs.sendForm("suseso-istas21", "template_u89vo4f", form)
+      emailjs.sendForm("service_qd1etoh", "template_u89vo4f", form)
         .then(()=>{
           document.getElementById('success').classList.remove('hidden');
           form.reset();
