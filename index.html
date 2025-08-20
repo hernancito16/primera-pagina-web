@@ -33,13 +33,10 @@
       </div>
     </div>
 
-    <!-- FORMULARIO NETLIFY -->
-    <form id="form" name="suseso-istas21" method="POST" data-netlify="true" netlify-honeypot="bot-field" class="space-y-6">
-      <input type="hidden" name="form-name" value="suseso-istas21" />
+    <!-- FORMULARIO -->
+    <form id="form" class="space-y-6">
       <input type="hidden" name="anon_id" id="anon_id_input" />
       <input type="hidden" name="timestamp" id="timestamp" />
-      <input type="hidden" name="email" value="hernan.fsanchez16@gmail.com" />
-      <p class="hidden"><label>Don’t fill this out if you're human: <input name="bot-field" /></label></p>
 
       <!-- Intro -->
       <section class="bg-white rounded-2xl shadow p-6">
@@ -68,7 +65,14 @@
     </div>
   </main>
 
+  <!-- Script de EmailJS -->
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
   <script>
+    // Inicializa EmailJS
+    (function(){
+      emailjs.init("DMjlqfACCGJaTnX3B");
+    })();
+    
     // ===== Helper UI =====
     const Q = {
       radios(name, label, options, required=true) {
@@ -338,7 +342,16 @@
 
     // ===== Envío =====
     form.addEventListener('submit', (e)=>{
+      e.preventDefault();
       document.getElementById('timestamp').value = new Date().toISOString();
+      emailjs.sendForm("suseso-istas21", "template_u89vo4f", form)
+        .then(()=>{
+          document.getElementById('success').classList.remove('hidden');
+          form.reset();
+          updateProgress();
+        }, (err)=>{
+          alert("Error al enviar: " + JSON.stringify(err));
+        });
     });
   </script>
 </body>
